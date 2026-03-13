@@ -29,7 +29,8 @@ export function initUpload() {
     fileInput.addEventListener('change', async (event) => {
         const file = event.target.files[0];
         if (file) {
-            await handleFileUpload(file);
+            // Show quiz name input modal
+            showQuizNameModal(file);
             // Reset input so same file can be selected again
             fileInput.value = '';
         }
@@ -37,10 +38,90 @@ export function initUpload() {
 }
 
 /**
- * Handle file upload process
+ * Show modal to input quiz name
  * @param {File} file - The file to upload
  */
-async function handleFileUpload(file) {
+function showQuizNameModal(file) {
+    // Create modal overlay
+    const modal = document.createElement('div');
+    modal.className = 'upload-modal-overlay';
+    
+    // Generate default name from filename
+    const defaultName = file.name
+        .replace('.json', '')
+        .replace(/[-_]/g, ' ')
+        .replace(/\b\w/g, char => char.toUpperCase());
+    
+    modal.innerHTML = `
+        <div class="upload-modal">
+            <h2>ตั้งชื่อข้อสอบ</h2>
+            <p>กรุณาใส่ชื่อสำหรับข้อสอบนี้</p>
+            <input 
+                type="text" 
+                id="quiz-name-input" 
+                class="quiz-name-input" 
+                placeholder="ชื่อข้อสอบ"
+                value="${defaultName}"
+                maxlength="100"
+            />
+            <div class="upload-modal-buttons">
+                <button class="modal-button modal-cancel">ยกเลิก</button>
+                <button class="modal-button modal-confirm">อัปโหลด</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Focus on input
+    const input = document.getElementById('quiz-name-input');
+    input.focus();
+    input.select();
+    
+    // Handle cancel
+    const cancelBtn = modal.querySelector('.modal-cancel');
+    cancelBtn.addEventListener('click', () => {
+        modal.remove();
+    });
+    
+    // Handle confirm
+    const confirmBtn = modal.querySelector('.modal-confirm');
+    const handleConfirm = async () => {
+        const quizName = input.value.trim();
+        
+        if (!quizName) {
+            input.style.borderColor = '#e74c3c';
+            input.focus();
+            return;
+        }
+        
+        modal.remove();
+        await handleFileUpload(file, quizName);
+    };
+    
+    confirmBtn.addEventListener('click', handleConfirm);
+    
+    // Handle Enter key
+    input.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            handleConfirm();
+        }
+    });
+    
+    // Handle Escape key
+    modal.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            modal.remove();
+        }
+    });
+}
+
+/**
+ * Handle file upload process
+ * @param {File} file - The file to upload
+ * @param {string} quizName - The custom name for the quiz
+ */
+async function handleFileUpload(file, quizName) {
     // Validate file type
     if (!file.name.endsWith('.json')) {
         showUploadStatus('error', 'Invalid file type. Please upload a JSON file.');
@@ -65,7 +146,7 @@ async function handleFileUpload(file) {
         
         // Upload to server
         showUploadStatus('loading', 'Uploading quiz...');
-        await uploadQuiz(file, validation.data);
+        await uploadQuiz(file, validation.data, quizName);
         
         showUploadStatus('success', 'Quiz uploaded successfully! Refreshing library...');
         
@@ -106,17 +187,12 @@ function readFileContent(file) {
  * Also attempts to save to server if available
  * @param {File} file - The file to upload
  * @param {object} quizData - The validated quiz data
+ * @param {string} customName - The custom name for the quiz
  * @returns {Promise<void>}
  */
-async function uploadQuiz(file, quizData) {
+async function uploadQuiz(file, quizData, customName) {
     // Generate quiz ID from filename
     const quizId = file.name.replace('.json', '').toLowerCase().replace(/[^a-z0-9-]/g, '-');
-    
-    // Generate title from filename (convert to readable format)
-    const titleFromFilename = file.name
-        .replace('.json', '')
-        .replace(/[-_]/g, ' ')
-        .replace(/\b\w/g, char => char.toUpperCase());
     
     // Try to upload to server first (if API is available)
     let serverUploadSuccess = false;
@@ -124,6 +200,7 @@ async function uploadQuiz(file, quizData) {
         const formData = new FormData();
         formData.append('file', file);
         formData.append('quizData', JSON.stringify(quizData));
+        formData.append('customName', customName);
         
         const response = await fetch('/api/upload', {
             method: 'POST',
@@ -143,7 +220,7 @@ async function uploadQuiz(file, quizData) {
     
     uploadedQuizzes[quizId] = {
         id: quizId,
-        title: quizData.title || titleFromFilename,
+        title: customName || quizData.title,
         description: quizData.description || '',
         difficulty: quizData.difficulty || 'medium',
         questionCount: quizData.questions.length,
