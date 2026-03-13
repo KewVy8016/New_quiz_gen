@@ -13,6 +13,9 @@
   "functions": {
     "api/upload.js": {
       "maxDuration": 10
+    },
+    "api/quiz-list.js": {
+      "maxDuration": 10
     }
   },
   "headers": [

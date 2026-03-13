@@ -88,6 +88,44 @@ async function parseMultipartFormData(req) {
 }
 
 /**
+ * Handle quiz list request
+ */
+async function handleQuizList(req, res) {
+    try {
+        const jsonDir = path.join(__dirname, 'json');
+        const quizListPath = path.join(jsonDir, 'quiz-list.json');
+        
+        try {
+            const content = await fs.readFile(quizListPath, 'utf-8');
+            const quizList = JSON.parse(content);
+            
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                quizzes: quizList.quizzes || [],
+                source: 'local'
+            }));
+        } catch (error) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                quizzes: [],
+                source: 'local',
+                message: 'No quiz-list.json found'
+            }));
+        }
+    } catch (error) {
+        console.error('Quiz list error:', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            success: false,
+            error: 'Failed to fetch quiz list',
+            message: error.message
+        }));
+    }
+}
+
+/**
  * Handle quiz upload
  */
 async function handleUpload(req, res) {
@@ -194,6 +232,12 @@ const server = http.createServer(async (req, res) => {
     // Handle API upload endpoint
     if (pathname === '/api/upload' && req.method === 'POST') {
         await handleUpload(req, res);
+        return;
+    }
+    
+    // Handle API quiz-list endpoint
+    if (pathname === '/api/quiz-list' && req.method === 'GET') {
+        await handleQuizList(req, res);
         return;
     }
     

@@ -209,39 +209,75 @@ async function uploadQuiz(file, quizData, customName) {
         formData.append('quizData', JSON.stringify(quizData));
         formData.append('customName', customName);
         
+        console.log('Uploading to /api/upload...');
+        
         const response = await fetch('/api/upload', {
             method: 'POST',
             body: formData
         });
         
+        console.log('Response status:', response.status);
+        
         if (response.ok) {
             const result = await response.json();
-            console.log('Quiz uploaded successfully:', result);
+            console.log('✓ Quiz uploaded to server successfully:', result);
+            
+            // Clear localStorage version if exists
+            const uploadedQuizzes = JSON.parse(localStorage.getItem('uploadedQuizzes') || '{}');
+            if (uploadedQuizzes[quizId]) {
+                delete uploadedQuizzes[quizId];
+                localStorage.setItem('uploadedQuizzes', JSON.stringify(uploadedQuizzes));
+                console.log('✓ Cleared localStorage version');
+            }
+            
             return { success: true, quizId, serverBacked: true };
         } else {
-            const error = await response.json();
-            throw new Error(error.message || 'Server returned error');
+            // Try to get error details
+            let errorMessage = 'Server returned error';
+            try {
+                const errorData = await response.json();
+                errorMessage = errorData.message || errorData.error || errorMessage;
+                console.error('Server error details:', errorData);
+            } catch (e) {
+                const errorText = await response.text();
+                console.error('Server error (text):', errorText);
+                errorMessage = errorText || errorMessage;
+            }
+            
+            throw new Error(`Upload failed (${response.status}): ${errorMessage}`);
         }
     } catch (error) {
-        console.warn('Server upload failed, falling back to localStorage:', error.message);
+        console.error('❌ Server upload failed:', error);
         
-        // Fallback: Store in localStorage only if server fails
-        const uploadedQuizzes = JSON.parse(localStorage.getItem('uploadedQuizzes') || '{}');
+        // Check if it's a network error (server not available)
+        const isNetworkError = error.message.includes('fetch') || 
+                               error.message.includes('NetworkError') ||
+                               error.message.includes('Failed to fetch');
         
-        uploadedQuizzes[quizId] = {
-            id: quizId,
-            title: customName,
-            description: quizData.description || '',
-            difficulty: quizData.difficulty || 'medium',
-            questionCount: quizData.questions.length,
-            data: quizData,
-            uploadedAt: new Date().toISOString(),
-            serverBacked: false
-        };
-        
-        localStorage.setItem('uploadedQuizzes', JSON.stringify(uploadedQuizzes));
-        
-        return { success: true, quizId, serverBacked: false };
+        if (isNetworkError) {
+            console.warn('⚠️ Server not available, using localStorage fallback');
+            
+            // Fallback: Store in localStorage only if server is not available
+            const uploadedQuizzes = JSON.parse(localStorage.getItem('uploadedQuizzes') || '{}');
+            
+            uploadedQuizzes[quizId] = {
+                id: quizId,
+                title: customName,
+                description: quizData.description || '',
+                difficulty: quizData.difficulty || 'medium',
+                questionCount: quizData.questions.length,
+                data: quizData,
+                uploadedAt: new Date().toISOString(),
+                serverBacked: false
+            };
+            
+            localStorage.setItem('uploadedQuizzes', JSON.stringify(uploadedQuizzes));
+            
+            return { success: true, quizId, serverBacked: false };
+        } else {
+            // If it's not a network error, throw it to show user
+            throw error;
+        }
     }
 }
 

@@ -10,7 +10,7 @@
  * 5. Return success/error response
  */
 
-import { put } from '@vercel/blob';
+import { put, list } from '@vercel/blob';
 import { readFile, writeFile } from 'fs/promises';
 import { join } from 'path';
 
@@ -299,56 +299,92 @@ export default async function handler(req, res) {
             
         } else {
             // VERCEL PRODUCTION: Use Blob Storage
+            console.log('Using Vercel Blob Storage...');
+            
             const blobFilename = `quizzes/${quizId}.json`;
             
+            // Upload quiz file to Blob Storage
             const blob = await put(blobFilename, JSON.stringify(quizData, null, 2), {
                 access: 'public',
-                contentType: 'application/json'
+                contentType: 'application/json',
+                addRandomSuffix: false
             });
             
-            // Store quiz metadata in Blob Storage as well (since filesystem is read-only)
-            const quizListBlobName = 'quiz-list.json';
-            let quizList;
+            console.log('✓ Quiz uploaded to Blob:', blob.url);
             
-            try {
-                // Try to fetch existing quiz-list from Blob Storage
-                const response = await fetch(`https://${process.env.BLOB_READ_WRITE_TOKEN?.split('_')[0]}.public.blob.vercel-storage.com/${quizListBlobName}`);
-                if (response.ok) {
-                    quizList = await response.json();
-                } else {
-                    quizList = { quizzes: [] };
-                }
-            } catch (error) {
-                // If not found, start with empty list
-                quizList = { quizzes: [] };
-            }
-            
-            const existingIndex = quizList.quizzes.findIndex(q => q.id === quizId);
+            // Build quiz metadata
             const newQuizMetadata = {
                 id: quizId,
                 title: quizData.title,
                 description: quizData.description,
                 difficulty: quizData.difficulty,
                 questionCount: quizData.questions.length,
-                filePath: blob.url
+                filePath: blob.url,
+                uploadedAt: new Date().toISOString()
             };
             
-            if (existingIndex >= 0) {
-                quizList.quizzes[existingIndex] = newQuizMetadata;
-            } else {
-                quizList.quizzes.push(newQuizMetadata);
+            // List all existing quizzes from Blob Storage
+            let quizList = { quizzes: [] };
+            
+            try {
+                const { blobs } = await list({ prefix: 'quizzes/' });
+                console.log(`Found ${blobs.length} quiz files in Blob Storage`);
+                
+                // Fetch each quiz to get metadata
+                for (const blobItem of blobs) {
+                    if (blobItem.pathname.endsWith('.json')) {
+                        try {
+                            const response = await fetch(blobItem.url);
+                            if (response.ok) {
+                                const quizContent = await response.json();
+                                const blobQuizId = blobItem.pathname.replace('quizzes/', '').replace('.json', '');
+                                
+                                // Skip if this is the quiz we just uploaded (we'll add it separately)
+                                if (blobQuizId !== quizId) {
+                                    quizList.quizzes.push({
+                                        id: blobQuizId,
+                                        title: quizContent.title,
+                                        description: quizContent.description,
+                                        difficulty: quizContent.difficulty,
+                                        questionCount: quizContent.questions?.length || 0,
+                                        filePath: blobItem.url
+                                    });
+                                }
+                            }
+                        } catch (error) {
+                            console.error(`Error fetching quiz ${blobItem.pathname}:`, error);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error listing blobs:', error);
             }
             
-            // Save updated quiz-list back to Blob Storage
-            await put(quizListBlobName, JSON.stringify(quizList, null, 2), {
+            // Add or update the current quiz
+            const existingIndex = quizList.quizzes.findIndex(q => q.id === quizId);
+            if (existingIndex >= 0) {
+                quizList.quizzes[existingIndex] = newQuizMetadata;
+                console.log('✓ Updated existing quiz in list');
+            } else {
+                quizList.quizzes.push(newQuizMetadata);
+                console.log('✓ Added new quiz to list');
+            }
+            
+            // Save quiz-list.json to Blob Storage
+            const listBlob = await put('quiz-list.json', JSON.stringify(quizList, null, 2), {
                 access: 'public',
-                contentType: 'application/json'
+                contentType: 'application/json',
+                addRandomSuffix: false
             });
+            
+            console.log('✓ Quiz list updated:', listBlob.url);
             
             return res.status(200).json({
                 success: true,
                 message: 'Quiz uploaded successfully (Vercel Blob)',
                 quiz: newQuizMetadata,
+                quizListUrl: listBlob.url,
+                totalQuizzes: quizList.quizzes.length,
                 location: 'vercel-blob'
             });
         }

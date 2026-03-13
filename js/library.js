@@ -14,65 +14,79 @@ async function fetchQuizList() {
   try {
     let quizzes = [];
     
-    // Try to fetch from local json/quiz-list.json first
+    // Try to fetch from API endpoint first (works for both local and Vercel)
     try {
-      let response = await fetch('/json/quiz-list.json');
-      
-      // If absolute path fails (file:// protocol), try relative path
-      if (!response.ok && window.location.protocol === 'file:') {
-        response = await fetch('./json/quiz-list.json');
-      }
+      const response = await fetch('/api/quiz-list');
       
       if (response.ok) {
         const data = await response.json();
-        
-        // Handle both array format and object format
-        if (Array.isArray(data)) {
-          quizzes = data;
-        } else if (data.quizzes && Array.isArray(data.quizzes)) {
+        if (data.success && Array.isArray(data.quizzes)) {
           quizzes = data.quizzes;
+          console.log(`✓ Loaded ${quizzes.length} quizzes from ${data.source}`);
         }
       }
     } catch (error) {
-      console.log('Local quiz-list not found, trying Blob Storage...');
-    }
-    
-    // If no local quizzes found, try Blob Storage (for Vercel deployment)
-    if (quizzes.length === 0) {
+      console.log('API endpoint not available, trying local file...');
+      
+      // Fallback: Try local json/quiz-list.json
       try {
-        // Try to fetch from Vercel Blob Storage
-        const blobResponse = await fetch('https://blob.vercel-storage.com/quiz-list.json');
-        if (blobResponse.ok) {
-          const data = await blobResponse.json();
+        let response = await fetch('/json/quiz-list.json');
+        
+        // If absolute path fails (file:// protocol), try relative path
+        if (!response.ok && window.location.protocol === 'file:') {
+          response = await fetch('./json/quiz-list.json');
+        }
+        
+        if (response.ok) {
+          const data = await response.json();
+          
+          // Handle both array format and object format
           if (Array.isArray(data)) {
             quizzes = data;
           } else if (data.quizzes && Array.isArray(data.quizzes)) {
             quizzes = data.quizzes;
           }
+          
+          console.log('✓ Loaded quizzes from local json/quiz-list.json:', quizzes.length);
         }
-      } catch (error) {
-        console.log('Blob Storage quiz-list not found');
+      } catch (localError) {
+        console.log('Local quiz-list not found');
       }
     }
     
-    // Add uploaded quizzes from localStorage
+    // Add uploaded quizzes from localStorage (only if not server-backed)
     const uploadedQuizzes = JSON.parse(localStorage.getItem('uploadedQuizzes') || '{}');
-    const uploadedQuizList = Object.values(uploadedQuizzes).map(quiz => ({
-      id: quiz.id,
-      title: quiz.title,
-      description: quiz.description,
-      difficulty: quiz.difficulty,
-      questionCount: quiz.questionCount,
-      uploaded: true
-    }));
+    const uploadedQuizList = Object.values(uploadedQuizzes)
+      .filter(quiz => !quiz.serverBacked) // Only include non-server-backed quizzes
+      .map(quiz => ({
+        id: quiz.id,
+        title: quiz.title,
+        description: quiz.description,
+        difficulty: quiz.difficulty,
+        questionCount: quiz.questionCount,
+        uploaded: true,
+        serverBacked: false
+      }));
     
-    // Combine both lists
-    return [...quizzes, ...uploadedQuizList];
+    if (uploadedQuizList.length > 0) {
+      console.log('✓ Found uploaded quizzes in localStorage:', uploadedQuizList.length);
+    }
+    
+    // Combine both lists (remove duplicates by ID)
+    const allQuizzes = [...quizzes];
+    uploadedQuizList.forEach(uploaded => {
+      if (!allQuizzes.find(q => q.id === uploaded.id)) {
+        allQuizzes.push(uploaded);
+      }
+    });
+    
+    console.log('✓ Total quizzes available:', allQuizzes.length);
+    return allQuizzes;
     
   } catch (error) {
     console.error('Error fetching quiz list:', error);
     
-    // If fetch fails, return only uploaded quizzes
+    // If all fails, return only uploaded quizzes from localStorage
     const uploadedQuizzes = JSON.parse(localStorage.getItem('uploadedQuizzes') || '{}');
     return Object.values(uploadedQuizzes).map(quiz => ({
       id: quiz.id,
@@ -80,7 +94,8 @@ async function fetchQuizList() {
       description: quiz.description,
       difficulty: quiz.difficulty,
       questionCount: quiz.questionCount,
-      uploaded: true
+      uploaded: true,
+      serverBacked: quiz.serverBacked || false
     }));
   }
 }
