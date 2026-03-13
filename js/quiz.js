@@ -8,7 +8,7 @@ let currentQuiz = null;
 let currentAnswers = {};
 
 /**
- * Load quiz data from JSON file
+ * Load quiz data from JSON file or Blob Storage
  * @param {string} quizId - Quiz identifier (filename without .json)
  * @returns {Promise<Object>} Quiz data object
  * @throws {Error} If quiz cannot be loaded
@@ -22,13 +22,46 @@ async function loadQuiz(quizId) {
     // First, check if quiz is in localStorage (uploaded quiz)
     const uploadedQuizzes = JSON.parse(localStorage.getItem('uploadedQuizzes') || '{}');
     if (uploadedQuizzes[quizId]) {
+      console.log('Loading quiz from localStorage:', quizId);
       currentQuiz = uploadedQuizzes[quizId].data;
       currentAnswers = {};
       return currentQuiz;
     }
     
-    // Otherwise, try to load from JSON file
-    // Try both absolute and relative paths for compatibility
+    // Try to get quiz metadata from API (includes Blob Storage URLs)
+    try {
+      const listResponse = await fetch('/api/quiz-list');
+      if (listResponse.ok) {
+        const listData = await listResponse.json();
+        if (listData.success && Array.isArray(listData.quizzes)) {
+          const quizMeta = listData.quizzes.find(q => q.id === quizId);
+          
+          if (quizMeta && quizMeta.filePath) {
+            // Quiz is in Blob Storage, load from URL
+            console.log('Loading quiz from Blob Storage:', quizMeta.filePath);
+            const blobResponse = await fetch(quizMeta.filePath);
+            
+            if (blobResponse.ok) {
+              const quizData = await blobResponse.json();
+              
+              // Validate quiz data structure
+              if (!quizData.title || !quizData.questions || !Array.isArray(quizData.questions)) {
+                throw new Error('Invalid quiz data structure');
+              }
+              
+              currentQuiz = quizData;
+              currentAnswers = {};
+              return quizData;
+            }
+          }
+        }
+      }
+    } catch (apiError) {
+      console.log('API not available, trying local file:', apiError.message);
+    }
+    
+    // Fallback: try to load from local JSON file
+    console.log('Loading quiz from local file:', quizId);
     let response = await fetch(`/json/${quizId}.json`);
     
     // If absolute path fails (file:// protocol), try relative path

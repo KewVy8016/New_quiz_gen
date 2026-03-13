@@ -234,11 +234,34 @@ async function uploadQuiz(file, quizData, customName) {
         } else {
             // Try to get error details
             let errorMessage = 'Server returned error';
+            let errorDetails = null;
+            
             try {
                 const errorData = await response.json();
                 errorMessage = errorData.message || errorData.error || errorMessage;
+                errorDetails = errorData;
                 console.error('Server error details:', errorData);
+                
+                // Check if it's a Blob Storage configuration error
+                if (errorData.error === 'Blob Storage not configured') {
+                    // Show helpful message to user
+                    const helpMessage = `
+                        ⚠️ Vercel Blob Storage ยังไม่ได้ตั้งค่า
+                        
+                        กรุณาทำตามขั้นตอน:
+                        1. ไปที่ Vercel Dashboard → Storage
+                        2. สร้าง Blob Storage ใหม่
+                        3. Connect กับ Project นี้
+                        4. Redeploy application
+                        
+                        ดูรายละเอียดใน SETUP_VERCEL_BLOB.md
+                    `;
+                    throw new Error(helpMessage);
+                }
             } catch (e) {
+                if (e.message.includes('Vercel Blob Storage')) {
+                    throw e; // Re-throw our custom error
+                }
                 const errorText = await response.text();
                 console.error('Server error (text):', errorText);
                 errorMessage = errorText || errorMessage;

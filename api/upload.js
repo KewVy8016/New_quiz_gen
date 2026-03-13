@@ -301,6 +301,21 @@ export default async function handler(req, res) {
             // VERCEL PRODUCTION: Use Blob Storage
             console.log('Using Vercel Blob Storage...');
             
+            // Check if BLOB_READ_WRITE_TOKEN is configured
+            if (!process.env.BLOB_READ_WRITE_TOKEN) {
+                console.error('BLOB_READ_WRITE_TOKEN not configured!');
+                return res.status(500).json({
+                    error: 'Blob Storage not configured',
+                    message: 'Please set up Vercel Blob Storage and connect it to this project. See SETUP_VERCEL_BLOB.md for instructions.',
+                    instructions: [
+                        '1. Go to Vercel Dashboard → Storage',
+                        '2. Create a new Blob Storage',
+                        '3. Connect it to this project',
+                        '4. Redeploy the application'
+                    ]
+                });
+            }
+            
             const blobFilename = `quizzes/${quizId}.json`;
             
             // Upload quiz file to Blob Storage
