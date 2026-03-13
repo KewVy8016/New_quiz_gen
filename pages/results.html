@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuizFlow - Results</title>
+    <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Quiz Results</h1>
+        </header>
+        
+        <main id="results-content">
+            <!-- Results will be rendered here -->
+        </main>
+    </div>
+
+    <script type="module">
+        import { loadResults } from '../js/storage.js';
+        import { calculateScore, getIncorrectAnswers } from '../js/quiz.js';
+        import { initNavigation } from '../js/navigation.js';
+
+        // Initialize navigation
+        initNavigation('results');
+
+        // Get quiz ID from URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const quizId = urlParams.get('quiz');
+
+        if (!quizId) {
+            displayError('No quiz specified');
+        } else {
+            displayResults(quizId);
+        }
+
+        /**
+         * Display quiz results
+         * @param {string} quizId - Quiz identifier
+         */
+        function displayResults(quizId) {
+            const results = loadResults(quizId);
+            
+            if (!results) {
+                displayError('No results found for this quiz');
+                return;
+            }
+
+            const container = document.getElementById('results-content');
+            
+            // Calculate time taken in readable format
+            const timeTaken = formatTime(results.timeTaken);
+            
+            // Calculate accuracy by difficulty
+            const difficultyStats = calculateDifficultyStats(results);
+            
+            // Build results HTML
+            container.innerHTML = `
+                <div class="results-container">
+                    <div class="results-score">
+                        <div class="score-value">${results.score}/${results.total}</div>
+                        <div class="score-percentage">${results.percentage}%</div>
+                    </div>
+                    
+                    <div class="results-time">
+                        Time taken: ${timeTaken}
+                    </div>
+                    
+                    ${difficultyStats.length > 0 ? `
+                        <div class="results-difficulty-stats">
+                            <h3>Accuracy by Difficulty</h3>
+                            ${difficultyStats.map(stat => `
+                                <div class="difficulty-stat-item">
+                                    <span class="difficulty-label difficulty-${stat.difficulty}">
+                                        ${stat.difficulty}
+                                    </span>
+                                    <span class="difficulty-stat-value">
+                                        ${stat.correct}/${stat.total} (${stat.percentage}%)
+                                    </span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                    
+                    <div class="results-actions">
+                        ${results.incorrectAnswers && results.incorrectAnswers.length > 0 ? `
+                            <button class="results-button review-mistakes-button" onclick="reviewMistakes()">
+                                Review Mistakes (${results.incorrectAnswers.length})
+                            </button>
+                        ` : ''}
+                        <button class="results-button retake-button" onclick="retakeQuiz()">
+                            Retake Quiz
+                        </button>
+                        <button class="results-button library-button" onclick="goToLibrary()">
+                            Back to Library
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        /**
+         * Format time in milliseconds to readable format
+         * @param {number} ms - Time in milliseconds
+         * @returns {string} Formatted time string
+         */
+        function formatTime(ms) {
+            if (!ms || ms < 0) return '0s';
+            
+            const seconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const hours = Math.floor(minutes / 60);
+            
+            if (hours > 0) {
+                const remainingMinutes = minutes % 60;
+                const remainingSeconds = seconds % 60;
+                return `${hours}h ${remainingMinutes}m ${remainingSeconds}s`;
+            } else if (minutes > 0) {
+                const remainingSeconds = seconds % 60;
+                return `${minutes}m ${remainingSeconds}s`;
+            } else {
+                return `${seconds}s`;
+            }
+        }
+
+        /**
+         * Calculate accuracy statistics by difficulty level
+         * @param {Object} results - Results object
+         * @returns {Array} Array of difficulty statistics
+         */
+        function calculateDifficultyStats(results) {
+            if (!results.difficultyStats) {
+                return [];
+            }
+
+            const stats = [];
+            const difficulties = ['easy', 'medium', 'hard'];
+            
+            difficulties.forEach(difficulty => {
+                const breakdown = results.difficultyStats[difficulty];
+                if (breakdown && breakdown.total > 0) {
+                    stats.push({
+                        difficulty,
+                        correct: breakdown.correct,
+                        total: breakdown.total,
+                        percentage: Math.round((breakdown.correct / breakdown.total) * 100)
+                    });
+                }
+            });
+            
+            return stats;
+        }
+
+        /**
+         * Display error message
+         * @param {string} message - Error message
+         */
+        function displayError(message) {
+            const container = document.getElementById('results-content');
+            container.innerHTML = `
+                <div class="error-message">
+                    <p>${message}</p>
+                    <button onclick="goToLibrary()">Back to Library</button>
+                </div>
+            `;
+        }
+
+        /**
+         * Navigate to review mistakes page
+         */
+        window.reviewMistakes = function() {
+            window.location.href = `review.html?quiz=${quizId}`;
+        };
+
+        /**
+         * Navigate to retake quiz
+         */
+        window.retakeQuiz = function() {
+            if (confirm('This will clear your current progress. Are you sure?')) {
+                // Clear progress and results
+                import('../js/storage.js').then(({ clearProgress, clearResults }) => {
+                    clearProgress(quizId);
+                    clearResults(quizId);
+                    window.location.href = `mode-selection.html?quiz=${quizId}`;
+                });
+            }
+        };
+
+        /**
+         * Navigate back to library
+         */
+        window.goToLibrary = function() {
+            window.location.href = '../index.html';
+        };
+    </script>
+</body>
+</html>

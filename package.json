@@ -1,0 +1,19 @@
+{
+  "name": "quizflow",
+  "version": "1.0.0",
+  "description": "Static quiz learning platform with Vercel Blob Storage",
+  "type": "module",
+  "scripts": {
+    "test": "vitest",
+    "dev": "vercel dev",
+    "serve": "npx http-server -p 3000 -c-1"
+  },
+  "dependencies": {
+    "@vercel/blob": "^0.23.0"
+  },
+  "devDependencies": {
+    "fast-check": "^3.15.0",
+    "jsdom": "^28.1.0",
+    "vitest": "^1.0.0"
+  }
+}

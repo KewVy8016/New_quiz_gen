@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Vercel
+.vercel
+
+# Environment variables
+.env
+.env.local
+.env*.local
+
+# Test files (optional - ถ้าไม่ต้องการ push test files)
+*.test.js
+test-*.html
+TASK_*.md
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

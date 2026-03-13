@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuizFlow - Review Mistakes</title>
+    <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Review Your Mistakes</h1>
+        </header>
+        
+        <main id="review-content">
+            <!-- Mistake review will be rendered here -->
+        </main>
+    </div>
+
+    <script type="module">
+        import { loadResults } from '../js/storage.js';
+        import { showMistakes } from '../js/ui.js';
+        import { initNavigation } from '../js/navigation.js';
+
+        // Initialize navigation
+        initNavigation('review');
+
+        // Get quiz ID from URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const quizId = urlParams.get('quiz');
+
+        if (!quizId) {
+            // No quiz ID provided, redirect to library
+            window.location.href = '../index.html';
+        } else {
+            // Load results from storage
+            const results = loadResults(quizId);
+
+            if (!results || !results.incorrectAnswers) {
+                // No results found, redirect to library
+                alert('No quiz results found. Please complete the quiz first.');
+                window.location.href = '../index.html';
+            } else {
+                // Track current mistake index
+                let currentMistakeIndex = 0;
+
+                // Render mistakes
+                function renderMistakes() {
+                    const reviewContent = document.getElementById('review-content');
+                    reviewContent.innerHTML = '';
+                    
+                    const mistakesElement = showMistakes(results.incorrectAnswers, currentMistakeIndex);
+                    reviewContent.appendChild(mistakesElement);
+
+                    // Add event listeners for navigation buttons
+                    const buttons = reviewContent.querySelectorAll('.mistakes-button');
+                    buttons.forEach(button => {
+                        button.addEventListener('click', handleButtonClick);
+                    });
+                }
+
+                // Handle button clicks
+                function handleButtonClick(event) {
+                    const action = event.target.getAttribute('data-action');
+
+                    switch (action) {
+                        case 'prev':
+                            if (currentMistakeIndex > 0) {
+                                currentMistakeIndex--;
+                                renderMistakes();
+                            }
+                            break;
+
+                        case 'next':
+                            if (currentMistakeIndex < results.incorrectAnswers.length - 1) {
+                                currentMistakeIndex++;
+                                renderMistakes();
+                            }
+                            break;
+
+                        case 'results':
+                            // Navigate back to results page
+                            window.location.href = `results.html?quiz=${quizId}`;
+                            break;
+
+                        case 'library':
+                            // Navigate to library
+                            window.location.href = '../index.html';
+                            break;
+                    }
+                }
+
+                // Initial render
+                renderMistakes();
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuizFlow - Select Mode</title>
+    <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Select Answer Mode</h1>
+            <p>Choose how you want to receive feedback</p>
+        </header>
+        
+        <main id="mode-selection">
+            <!-- Mode selection cards will be rendered here -->
+        </main>
+    </div>
+    
+    <script type="module" src="../js/mode-selection.js"></script>
+    <script type="module">
+        import { initNavigation } from '../js/navigation.js';
+        initNavigation('mode-selection');
+    </script>
+</body>
+</html>

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuizFlow - Quiz Library</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>QuizFlow</h1>
+            <p>Choose a quiz to get started</p>
+        </header>
+        
+        <main id="quiz-library">
+            <!-- Quiz cards will be rendered here -->
+        </main>
+        
+        <button id="upload-btn" class="upload-button">Upload New Quiz</button>
+    </div>
+    
+    <script type="module">
+        import { fetchQuizList, renderQuizCard, calculateProgress } from './js/library.js';
+        import { initUpload } from './js/upload.js';
+        import { initNavigation } from './js/navigation.js';
+        
+        // Initialize navigation
+        initNavigation('library');
+        
+        // Initialize upload functionality
+        initUpload();
+        
+        // Load and render quiz library
+        async function loadLibrary() {
+            const libraryContainer = document.getElementById('quiz-library');
+            
+            try {
+                const quizzes = await fetchQuizList();
+                
+                if (quizzes.length === 0) {
+                    libraryContainer.innerHTML = '<p class="no-quizzes">No quizzes available yet. Upload one to get started!</p>';
+                    return;
+                }
+                
+                // Clear loading state
+                libraryContainer.innerHTML = '';
+                
+                // Render each quiz card
+                quizzes.forEach(quiz => {
+                    const progress = calculateProgress(quiz.id);
+                    const card = renderQuizCard(quiz, progress);
+                    if (card) {
+                        libraryContainer.appendChild(card);
+                    }
+                });
+            } catch (error) {
+                libraryContainer.innerHTML = `
+                    <div class="error-message">
+                        <p>Failed to load quiz library: ${error.message}</p>
+                        <button onclick="location.reload()">Retry</button>
+                    </div>
+                `;
+            }
+        }
+        
+        // Load library on page load
+        loadLibrary();
+    </script>
+</body>
+</html>
