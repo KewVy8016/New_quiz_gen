@@ -22,50 +22,69 @@ async function loadQuiz(quizId) {
     // First, check if quiz is in localStorage (uploaded quiz)
     const uploadedQuizzes = JSON.parse(localStorage.getItem('uploadedQuizzes') || '{}');
     if (uploadedQuizzes[quizId]) {
-      console.log('Loading quiz from localStorage:', quizId);
+      console.log('✓ Loading quiz from localStorage:', quizId);
       currentQuiz = uploadedQuizzes[quizId].data;
       currentAnswers = {};
       return currentQuiz;
     }
+    
+    console.log('Quiz not in localStorage, checking API...');
     
     // Try to get quiz metadata from API (includes Blob Storage URLs)
     try {
       const listResponse = await fetch('/api/quiz-list');
       if (listResponse.ok) {
         const listData = await listResponse.json();
+        console.log('✓ Got quiz list from API:', listData);
+        
         if (listData.success && Array.isArray(listData.quizzes)) {
           const quizMeta = listData.quizzes.find(q => q.id === quizId);
           
-          if (quizMeta && quizMeta.filePath) {
-            // Quiz is in Blob Storage, load from URL
-            console.log('Loading quiz from Blob Storage:', quizMeta.filePath);
-            const blobResponse = await fetch(quizMeta.filePath);
+          if (quizMeta) {
+            console.log('✓ Found quiz metadata:', quizMeta);
             
-            if (blobResponse.ok) {
-              const quizData = await blobResponse.json();
+            if (quizMeta.filePath) {
+              // Quiz is in Blob Storage, load from URL
+              console.log('→ Loading quiz from Blob Storage:', quizMeta.filePath);
+              const blobResponse = await fetch(quizMeta.filePath);
               
-              // Validate quiz data structure
-              if (!quizData.title || !quizData.questions || !Array.isArray(quizData.questions)) {
-                throw new Error('Invalid quiz data structure');
+              if (blobResponse.ok) {
+                const quizData = await blobResponse.json();
+                
+                // Validate quiz data structure
+                if (!quizData.title || !quizData.questions || !Array.isArray(quizData.questions)) {
+                  throw new Error('Invalid quiz data structure');
+                }
+                
+                console.log('✓ Quiz loaded successfully from Blob Storage');
+                currentQuiz = quizData;
+                currentAnswers = {};
+                return quizData;
+              } else {
+                console.error('Failed to load from Blob Storage:', blobResponse.status);
               }
-              
-              currentQuiz = quizData;
-              currentAnswers = {};
-              return quizData;
+            } else if (quizMeta.file) {
+              // Quiz has local file path
+              console.log('→ Quiz has local file path:', quizMeta.file);
             }
+          } else {
+            console.warn('Quiz not found in quiz list:', quizId);
           }
         }
+      } else {
+        console.log('API returned error:', listResponse.status);
       }
     } catch (apiError) {
-      console.log('API not available, trying local file:', apiError.message);
+      console.log('⚠️ API not available, trying local file:', apiError.message);
     }
     
     // Fallback: try to load from local JSON file
-    console.log('Loading quiz from local file:', quizId);
+    console.log('→ Trying to load from local file: /json/' + quizId + '.json');
     let response = await fetch(`/json/${quizId}.json`);
     
     // If absolute path fails (file:// protocol), try relative path
     if (!response.ok && window.location.protocol === 'file:') {
+      console.log('→ Trying relative path...');
       response = await fetch(`../json/${quizId}.json`);
     }
     
@@ -80,12 +99,13 @@ async function loadQuiz(quizId) {
       throw new Error('Invalid quiz data structure');
     }
 
+    console.log('✓ Quiz loaded successfully from local file');
     currentQuiz = quizData;
     currentAnswers = {};
     
     return quizData;
   } catch (error) {
-    console.error('Error loading quiz:', error);
+    console.error('❌ Error loading quiz:', error);
     throw error;
   }
 }
