@@ -242,6 +242,11 @@ async function uploadQuiz(file, quizData, customName) {
                 errorDetails = errorData;
                 console.error('Server error details:', errorData);
                 
+                // Show validation errors if available
+                if (errorData.errors && Array.isArray(errorData.errors)) {
+                    console.error('Validation errors:', errorData.errors);
+                }
+                
                 // Check if it's a Blob Storage configuration error
                 if (errorData.error === 'Blob Storage not configured') {
                     // Show helpful message to user
