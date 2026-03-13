@@ -12,24 +12,46 @@ import { loadResults, loadProgress } from './storage.js';
  */
 async function fetchQuizList() {
   try {
-    // Try both absolute and relative paths for compatibility
-    let response = await fetch('/json/quiz-list.json');
-    
-    // If absolute path fails (file:// protocol), try relative path
-    if (!response.ok && window.location.protocol === 'file:') {
-      response = await fetch('./json/quiz-list.json');
-    }
-    
     let quizzes = [];
     
-    if (response.ok) {
-      const data = await response.json();
+    // Try to fetch from local json/quiz-list.json first
+    try {
+      let response = await fetch('/json/quiz-list.json');
       
-      // Handle both array format and object format
-      if (Array.isArray(data)) {
-        quizzes = data;
-      } else if (data.quizzes && Array.isArray(data.quizzes)) {
-        quizzes = data.quizzes;
+      // If absolute path fails (file:// protocol), try relative path
+      if (!response.ok && window.location.protocol === 'file:') {
+        response = await fetch('./json/quiz-list.json');
+      }
+      
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Handle both array format and object format
+        if (Array.isArray(data)) {
+          quizzes = data;
+        } else if (data.quizzes && Array.isArray(data.quizzes)) {
+          quizzes = data.quizzes;
+        }
+      }
+    } catch (error) {
+      console.log('Local quiz-list not found, trying Blob Storage...');
+    }
+    
+    // If no local quizzes found, try Blob Storage (for Vercel deployment)
+    if (quizzes.length === 0) {
+      try {
+        // Try to fetch from Vercel Blob Storage
+        const blobResponse = await fetch('https://blob.vercel-storage.com/quiz-list.json');
+        if (blobResponse.ok) {
+          const data = await blobResponse.json();
+          if (Array.isArray(data)) {
+            quizzes = data;
+          } else if (data.quizzes && Array.isArray(data.quizzes)) {
+            quizzes = data.quizzes;
+          }
+        }
+      } catch (error) {
+        console.log('Blob Storage quiz-list not found');
       }
     }
     

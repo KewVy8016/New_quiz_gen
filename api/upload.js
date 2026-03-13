@@ -121,21 +121,22 @@ function validateQuestion(question, index) {
 
 /**
  * Generates a unique quiz ID from the title
+ * Supports Thai characters
  * @param {string} title - The quiz title
  * @returns {string} A URL-safe quiz ID
  */
 function generateQuizId(title) {
     return title
         .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/[^a-z0-9ก-๙]+/g, '-')
         .replace(/^-+|-+$/g, '');
 }
 
 /**
- * Parses multipart form data to extract file content
+ * Parses multipart form data to extract file content and custom name
  * Uses a simple parser for Vercel environment
  * @param {Request} req - The request object
- * @returns {Promise<{content: string, filename: string}>} File content and name
+ * @returns {Promise<{content: string, filename: string, customName: string}>} File content, name, and custom name
  */
 async function parseFormData(req) {
     // Vercel provides body-parser middleware, but for file uploads
@@ -163,29 +164,41 @@ async function parseFormData(req) {
     // Parse multipart sections
     const parts = body.split(`--${boundary}`);
     
+    let fileContent = null;
+    let filename = 'quiz.json';
+    let customName = null;
+    
     for (const part of parts) {
         // Skip empty parts and closing boundary
         if (!part || part === '--\r\n' || part === '--') continue;
+        
+        // Extract content (everything after the double CRLF)
+        const headerEnd = part.indexOf('\r\n\r\n');
+        if (headerEnd === -1) continue;
+        
+        const contentStart = headerEnd + 4;
+        const contentEnd = part.lastIndexOf('\r\n');
+        const content = part.substring(contentStart, contentEnd > contentStart ? contentEnd : undefined);
         
         // Check if this part contains a file
         if (part.includes('Content-Disposition') && part.includes('name="file"')) {
             // Extract filename
             const filenameMatch = part.match(/filename="([^"]+)"/);
-            const filename = filenameMatch ? filenameMatch[1] : 'quiz.json';
-            
-            // Extract content (everything after the double CRLF)
-            const headerEnd = part.indexOf('\r\n\r\n');
-            if (headerEnd === -1) continue;
-            
-            const contentStart = headerEnd + 4;
-            const contentEnd = part.lastIndexOf('\r\n');
-            const content = part.substring(contentStart, contentEnd > contentStart ? contentEnd : undefined);
-            
-            return { content, filename };
+            filename = filenameMatch ? filenameMatch[1] : 'quiz.json';
+            fileContent = content;
+        }
+        
+        // Check if this part contains customName
+        if (part.includes('Content-Disposition') && part.includes('name="customName"')) {
+            customName = content.trim();
         }
     }
     
-    throw new Error('No file found in form data');
+    if (!fileContent) {
+        throw new Error('No file found in form data');
+    }
+    
+    return { content: fileContent, filename, customName };
 }
 
 export default async function handler(req, res) {
@@ -202,7 +215,7 @@ export default async function handler(req, res) {
         const isLocal = !process.env.VERCEL && !process.env.BLOB_READ_WRITE_TOKEN;
         
         // 1. Parse multipart form data
-        const { content, filename } = await parseFormData(req);
+        const { content, filename, customName } = await parseFormData(req);
         
         // Validate file extension
         if (!filename.endsWith('.json')) {
@@ -223,6 +236,11 @@ export default async function handler(req, res) {
             });
         }
         
+        // Use custom name if provided
+        if (customName) {
+            quizData.title = customName;
+        }
+        
         const validation = validateQuizFormat(quizData);
         if (!validation.valid) {
             return res.status(400).json({
@@ -232,7 +250,7 @@ export default async function handler(req, res) {
             });
         }
         
-        // 3. Generate quiz ID
+        // 3. Generate quiz ID from title (which may be customName)
         const quizId = generateQuizId(quizData.title);
         
         if (isLocal) {
@@ -283,19 +301,25 @@ export default async function handler(req, res) {
             // VERCEL PRODUCTION: Use Blob Storage
             const blobFilename = `quizzes/${quizId}.json`;
             
-            const blob = await put(blobFilename, content, {
+            const blob = await put(blobFilename, JSON.stringify(quizData, null, 2), {
                 access: 'public',
                 contentType: 'application/json'
             });
             
-            // Update quiz-list.json
-            const quizListPath = join(process.cwd(), 'json', 'quiz-list.json');
+            // Store quiz metadata in Blob Storage as well (since filesystem is read-only)
+            const quizListBlobName = 'quiz-list.json';
             let quizList;
             
             try {
-                const quizListContent = await readFile(quizListPath, 'utf-8');
-                quizList = JSON.parse(quizListContent);
+                // Try to fetch existing quiz-list from Blob Storage
+                const response = await fetch(`https://${process.env.BLOB_READ_WRITE_TOKEN?.split('_')[0]}.public.blob.vercel-storage.com/${quizListBlobName}`);
+                if (response.ok) {
+                    quizList = await response.json();
+                } else {
+                    quizList = { quizzes: [] };
+                }
             } catch (error) {
+                // If not found, start with empty list
                 quizList = { quizzes: [] };
             }
             
@@ -315,7 +339,11 @@ export default async function handler(req, res) {
                 quizList.quizzes.push(newQuizMetadata);
             }
             
-            await writeFile(quizListPath, JSON.stringify(quizList, null, 2), 'utf-8');
+            // Save updated quiz-list back to Blob Storage
+            await put(quizListBlobName, JSON.stringify(quizList, null, 2), {
+                access: 'public',
+                contentType: 'application/json'
+            });
             
             return res.status(200).json({
                 success: true,

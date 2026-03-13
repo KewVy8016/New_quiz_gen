@@ -6,7 +6,8 @@
   "scripts": {
     "test": "vitest",
     "dev": "vercel dev",
-    "serve": "npx http-server -p 3000 -c-1"
+    "serve": "npx http-server -p 3000 -c-1",
+    "start": "node server.js"
   },
   "dependencies": {
     "@vercel/blob": "^0.23.0"

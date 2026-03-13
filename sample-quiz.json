@@ -1,0 +1,28 @@
+{
+  "title": "ตัวอย่างข้อสอบ",
+  "description": "ข้อสอบทดสอบระบบ",
+  "difficulty": "easy",
+  "questions": [
+    {
+      "text": "1 + 1 เท่ากับเท่าไหร่?",
+      "answers": ["1", "2", "3", "4"],
+      "correct": 1,
+      "difficulty": "easy",
+      "info": "การบวกพื้นฐาน"
+    },
+    {
+      "text": "สีของท้องฟ้าคืออะไร?",
+      "answers": ["แดง", "เขียว", "ฟ้า", "เหลือง"],
+      "correct": 2,
+      "difficulty": "easy",
+      "info": "ท้องฟ้ามีสีฟ้า"
+    },
+    {
+      "text": "2 × 3 เท่ากับเท่าไหร่?",
+      "answers": ["4", "5", "6", "7"],
+      "correct": 2,
+      "difficulty": "medium",
+      "info": "การคูณพื้นฐาน"
+    }
+  ]
+}

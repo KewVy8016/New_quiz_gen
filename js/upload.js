@@ -182,23 +182,30 @@ function readFileContent(file) {
 }
 
 /**
- * Upload quiz (hybrid: local file + Vercel Blob)
- * Stores quiz in localStorage for immediate use
- * Also attempts to save to server if available
+ * Upload quiz to server
+ * Attempts to save to server/file system
+ * Falls back to localStorage only if server is unavailable
  * @param {File} file - The file to upload
  * @param {object} quizData - The validated quiz data
  * @param {string} customName - The custom name for the quiz
  * @returns {Promise<void>}
  */
 async function uploadQuiz(file, quizData, customName) {
-    // Generate quiz ID from filename
-    const quizId = file.name.replace('.json', '').toLowerCase().replace(/[^a-z0-9-]/g, '-');
+    // Generate quiz ID from custom name
+    const quizId = customName.toLowerCase().replace(/[^a-z0-9ก-๙]+/g, '-').replace(/^-+|-+$/g, '');
     
-    // Try to upload to server first (if API is available)
-    let serverUploadSuccess = false;
+    // Update quiz data with custom name
+    quizData.title = customName;
+    
+    // Try to upload to server/save as file
     try {
         const formData = new FormData();
-        formData.append('file', file);
+        
+        // Create a new file with the custom name
+        const newFileName = `${quizId}.json`;
+        const newFile = new File([JSON.stringify(quizData, null, 2)], newFileName, { type: 'application/json' });
+        
+        formData.append('file', newFile);
         formData.append('quizData', JSON.stringify(quizData));
         formData.append('customName', customName);
         
@@ -208,30 +215,34 @@ async function uploadQuiz(file, quizData, customName) {
         });
         
         if (response.ok) {
-            serverUploadSuccess = true;
-            console.log('Quiz uploaded to server successfully');
+            const result = await response.json();
+            console.log('Quiz uploaded successfully:', result);
+            return { success: true, quizId, serverBacked: true };
+        } else {
+            const error = await response.json();
+            throw new Error(error.message || 'Server returned error');
         }
     } catch (error) {
-        console.log('Server upload not available, using localStorage only:', error.message);
+        console.warn('Server upload failed, falling back to localStorage:', error.message);
+        
+        // Fallback: Store in localStorage only if server fails
+        const uploadedQuizzes = JSON.parse(localStorage.getItem('uploadedQuizzes') || '{}');
+        
+        uploadedQuizzes[quizId] = {
+            id: quizId,
+            title: customName,
+            description: quizData.description || '',
+            difficulty: quizData.difficulty || 'medium',
+            questionCount: quizData.questions.length,
+            data: quizData,
+            uploadedAt: new Date().toISOString(),
+            serverBacked: false
+        };
+        
+        localStorage.setItem('uploadedQuizzes', JSON.stringify(uploadedQuizzes));
+        
+        return { success: true, quizId, serverBacked: false };
     }
-    
-    // Always store in localStorage as fallback/cache
-    const uploadedQuizzes = JSON.parse(localStorage.getItem('uploadedQuizzes') || '{}');
-    
-    uploadedQuizzes[quizId] = {
-        id: quizId,
-        title: customName || quizData.title,
-        description: quizData.description || '',
-        difficulty: quizData.difficulty || 'medium',
-        questionCount: quizData.questions.length,
-        data: quizData,
-        uploadedAt: new Date().toISOString(),
-        serverBacked: serverUploadSuccess
-    };
-    
-    localStorage.setItem('uploadedQuizzes', JSON.stringify(uploadedQuizzes));
-    
-    return { success: true, quizId, serverBacked: serverUploadSuccess };
 }
 
 /**
